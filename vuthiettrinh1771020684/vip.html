@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <title>Chat an toàn AES + Socket.IO</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; background: #f0f0f0; }
+        #chat { height: 400px; border: 1px solid #ccc; padding: 10px; overflow-y: auto; background: #fff; }
+        #chat div { margin-bottom: 10px; }
+        #chat .me { text-align: right; color: blue; }
+        #chat .other { text-align: left; color: green; }
+        input, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+        #keyInput { font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h2>🔐 Chat an toàn với AES và Socket.IO</h2>
+
+    <label>🔑 Nhập khóa AES (độ dài tự do):</label>
+    <input type="text" id="keyInput" placeholder="Nhập khóa mã hóa AES" />
+
+    <div id="chat"></div>
+
+    <input type="text" id="msgInput" placeholder="Nhập tin nhắn (độ dài tự do)" autocomplete="off" />
+    <button id="sendBtn">Gửi tin nhắn</button>
+
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script>
+        const socket = io();
+
+        const chat = document.getElementById('chat');
+        const keyInput = document.getElementById('keyInput');
+        const msgInput = document.getElementById('msgInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        const room = 'default_room';
+        socket.emit('join', { room });
+
+        function addMessage(text, fromMe) {
+            const div = document.createElement('div');
+            div.className = fromMe ? 'me' : 'other';
+            div.textContent = text;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+  
+        function encryptMessage(message, key) {
+ 
+            if (!key) return message;
+            return CryptoJS.AES.encrypt(message, key).toString();
+        }
+
+        function decryptMessage(ciphertext, key) {
+            if (!key) return ciphertext;
+            try {
+                const bytes = CryptoJS.AES.decrypt(ciphertext, key);
+                const originalText = bytes.toString(CryptoJS.enc.Utf8);
+                return originalText || '[Không thể giải mã]';
+            } catch {
+                return '[Lỗi giải mã]';
+            }
+        }
+
+        sendBtn.onclick = () => {
+            const key = keyInput.value.trim();
+            const msg = msgInput.value.trim();
+            if (!msg) return alert('Vui lòng nhập tin nhắn!');
+if (!key) alert('Chú ý: Không nhập khóa sẽ gửi tin nhắn không mã hóa!');
+
+            const encrypted = encryptMessage(msg, key);
+            socket.emit('send_encrypted_message', { room, message: encrypted });
+
+            addMessage('Bạn: ' + msg, true);
+            msgInput.value = '';
+        };
+
+        socket.on('receive_encrypted_message', data => {
+            const key = keyInput.value.trim();
+            const decrypted = decryptMessage(data.message, key);
+            addMessage('Bạn bè: ' + decrypted, false);
+        });
+
+        socket.on('status', data => {
+            addMessage(`[Thông báo]: ${data.msg}`, false);
+        });
+    </script>
+</body>
+</html>
